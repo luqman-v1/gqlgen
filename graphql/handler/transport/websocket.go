@@ -147,6 +147,7 @@ func (c *wsConnection) run() {
 	}
 
 	for {
+		start := graphql.Now()
 		message := c.readOp()
 		if message == nil {
 			return
@@ -154,7 +155,7 @@ func (c *wsConnection) run() {
 
 		switch message.Type {
 		case startMsg:
-			if !c.subscribe(message) {
+			if !c.subscribe(start, message) {
 				return
 			}
 		case stopMsg:
@@ -190,12 +191,17 @@ func (c *wsConnection) keepAlive(ctx context.Context) {
 	}
 }
 
-func (c *wsConnection) subscribe(message *operationMessage) bool {
+func (c *wsConnection) subscribe(start time.Time, message *operationMessage) bool {
 	ctx := graphql.StartOperationTrace(c.ctx)
 	var params *graphql.RawParams
 	if err := jsonDecode(bytes.NewReader(message.Payload), &params); err != nil {
 		c.sendConnectionError("invalid json")
 		return false
+	}
+
+	params.ReadTime = graphql.TraceTiming{
+		Start: start,
+		End:   graphql.Now(),
 	}
 
 	rc, err := c.exec.CreateOperationContext(ctx, params)
